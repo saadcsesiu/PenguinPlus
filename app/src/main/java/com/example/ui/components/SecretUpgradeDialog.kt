@@ -53,14 +53,16 @@ import com.example.ui.theme.GoldAccent
 @Composable
 fun SecretUpgradeDialog(
     isOpen: Boolean,
+    isVerifying: Boolean,
+    errorMessage: String?,
+    onClearError: () -> Unit,
     onDismiss: () -> Unit,
-    onVerify: (email: String, code: String) -> Boolean
+    onVerify: (email: String, code: String) -> Unit
 ) {
     if (!isOpen) return
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Box(
@@ -146,7 +148,7 @@ fun SecretUpgradeDialog(
                     value = email,
                     onValueChange = {
                         email = it
-                        errorMessage = null
+                        onClearError()
                     },
                     label = { Text("Authorized Email") },
                     placeholder = { Text("developer@domain.com") },
@@ -175,7 +177,7 @@ fun SecretUpgradeDialog(
                     value = password,
                     onValueChange = {
                         password = it
-                        errorMessage = null
+                        onClearError()
                     },
                     label = { Text("Access Code") },
                     placeholder = { Text("Enter access code") },
@@ -212,12 +214,8 @@ fun SecretUpgradeDialog(
 
                 // Unlock Button
                 Button(
-                    onClick = {
-                        val success = onVerify(email, password)
-                        if (!success) {
-                            errorMessage = "Invalid credentials. Please verify your email and access code."
-                        }
-                    },
+                    onClick = { onVerify(email, password) },
+                    enabled = !isVerifying,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
@@ -239,22 +237,43 @@ fun SecretUpgradeDialog(
                             .border(1.dp, GoldAccent.copy(alpha = 0.6f), RoundedCornerShape(18.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = null,
-                                tint = Color.Black,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                text = "Activate Free Lifetime Pro",
-                                color = Color.Black,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black
-                            )
+                        if (isVerifying) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CustomParsingProgressIndicator(
+                                    size = 20.dp,
+                                    strokeWidth = 2.4.dp,
+                                    primaryColor = Color.Black,
+                                    secondaryColor = BurgundyHeader,
+                                    trackColor = Color.Black.copy(alpha = 0.2f)
+                                )
+                                Text(
+                                    text = "Verifying...",
+                                    color = Color.Black,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Activate Free Lifetime Pro",
+                                    color = Color.Black,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
                         }
                     }
                 }

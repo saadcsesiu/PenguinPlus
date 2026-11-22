@@ -67,6 +67,8 @@ fun PenguinPlusApp(viewModel: MainViewModel = viewModel()) {
     val activeToast by viewModel.activeToast.collectAsState()
     val isSubmittingPayment by viewModel.isSubmittingPayment.collectAsState()
     val paymentFeedbackMessage by viewModel.paymentFeedbackMessage.collectAsState()
+    val isVerifyingSecret by viewModel.isVerifyingSecret.collectAsState()
+    val secretUpgradeError by viewModel.secretUpgradeError.collectAsState()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -179,6 +181,9 @@ fun PenguinPlusApp(viewModel: MainViewModel = viewModel()) {
     // Modal: Secret Free Upgrade
     SecretUpgradeDialog(
         isOpen = showSecretUpgradeDialog,
+        isVerifying = isVerifyingSecret,
+        errorMessage = secretUpgradeError,
+        onClearError = { viewModel.clearSecretUpgradeError() },
         onDismiss = { viewModel.closeSecretUpgradeDialog() },
         onVerify = { email, pass ->
             viewModel.verifySecretUpgrade(email, pass)

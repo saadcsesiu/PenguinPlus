@@ -39,38 +39,46 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Decode Debug Keystore
+      - name: Prepare Release Keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ ! -f debug.keystore ]; then
-            if [ -f debug.keystore.base64 ]; then
-              tr -d '\r\n' < debug.keystore.base64 | base64 -d > debug.keystore
-            else
-              keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-            fi
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Missing required release signing secrets. Add RELEASE_KEYSTORE_BASE64, STORE_PASSWORD, and KEY_PASSWORD in GitHub Repository Settings -> Secrets and variables -> Actions."
+            exit 1
           fi
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > my-upload-key.jks
 
       - name: Create .env from GitHub Secrets
         env:
           GOOGLE_APPS_SCRIPT_URL: ${{ secrets.GOOGLE_APPS_SCRIPT_URL }}
-          SECRET_REDEEM_EMAIL: ${{ secrets.SECRET_REDEEM_EMAIL }}
-          SECRET_REDEEM_CODE: ${{ secrets.SECRET_REDEEM_CODE }}
         run: |
           : > .env
           if [ -n "$GOOGLE_APPS_SCRIPT_URL" ]; then
             printf 'GOOGLE_APPS_SCRIPT_URL=%s\n' "$GOOGLE_APPS_SCRIPT_URL" >> .env
           fi
-          if [ -n "$SECRET_REDEEM_EMAIL" ]; then
-            printf 'SECRET_REDEEM_EMAIL=%s\n' "$SECRET_REDEEM_EMAIL" >> .env
-          fi
-          if [ -n "$SECRET_REDEEM_CODE" ]; then
-            printf 'SECRET_REDEEM_CODE=%s\n' "$SECRET_REDEEM_CODE" >> .env
-          fi
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Build Signed Release APK & AAB
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease bundleRelease --no-daemon --stacktrace
 
-      - name: Upload APK Artifact
+      - name: Clean Up Sensitive Build Files
+        if: always()
+        run: rm -f my-upload-key.jks .env
+
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PenguinPlus-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: PenguinPlus-Release-APK
+          path: app/build/outputs/apk/release/*.apk
+
+      - name: Upload Release AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PenguinPlus-Release-AAB
+          path: app/build/outputs/bundle/release/*.aab

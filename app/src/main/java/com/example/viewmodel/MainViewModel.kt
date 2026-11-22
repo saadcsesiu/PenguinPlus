@@ -3,12 +3,10 @@ package com.example.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.BuildConfig
 import com.example.data.BackendService
 import com.example.data.DownloadRepository
 import com.example.data.ToastEvent
 import com.example.data.UserPreferences
-import java.security.MessageDigest
 import com.example.model.DownloadHistoryItem
 import com.example.model.DownloadItem
 import com.example.model.InstagramParsedMedia
@@ -95,6 +93,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _paymentFeedbackMessage = MutableStateFlow<String?>(null)
     val paymentFeedbackMessage: StateFlow<String?> = _paymentFeedbackMessage.asStateFlow()
+
+    private val _isVerifyingSecret = MutableStateFlow(false)
+    val isVerifyingSecret: StateFlow<Boolean> = _isVerifyingSecret.asStateFlow()
+
+    private val _secretUpgradeError = MutableStateFlow<String?>(null)
+    val secretUpgradeError: StateFlow<String?> = _secretUpgradeError.asStateFlow()
 
     private var toastJob: Job? = null
     private var parseUrlJob: Job? = null
@@ -321,11 +325,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openSecretUpgradeDialog() {
+        _secretUpgradeError.value = null
         _showSecretUpgradeDialog.value = true
     }
 
     fun closeSecretUpgradeDialog() {
         _showSecretUpgradeDialog.value = false
+        _secretUpgradeError.value = null
+        _isVerifyingSecret.value = false
+    }
+
+    fun clearSecretUpgradeError() {
+        _secretUpgradeError.value = null
     }
 
     fun setPreviewItem(item: DownloadItem?) {
@@ -417,43 +428,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun verifySecretUpgrade(email: String, code: String): Boolean {
+    fun verifySecretUpgrade(email: String, code: String) {
         val trimmedEmail = email.trim().lowercase()
         val trimmedCode = code.trim()
 
-        val configuredEmail = try {
-            BuildConfig.SECRET_REDEEM_EMAIL.trim().lowercase()
-        } catch (_: Throwable) {
-            ""
+        if (trimmedEmail.isBlank() || !trimmedEmail.contains("@")) {
+            _secretUpgradeError.value = "Please enter a valid authorized email."
+            return
         }
-        val configuredCode = try {
-            BuildConfig.SECRET_REDEEM_CODE.trim()
-        } catch (_: Throwable) {
-            ""
+        if (trimmedCode.isBlank()) {
+            _secretUpgradeError.value = "Please enter your access code."
+            return
         }
 
-        val hasValidConfiguredSecrets = configuredEmail.isNotBlank() &&
-            configuredCode.isNotBlank() &&
-            configuredEmail != "your_admin_email_here" &&
-            configuredCode != "YOUR_SECRET_CODE_HERE"
+        viewModelScope.launch {
+            _isVerifyingSecret.value = true
+            _secretUpgradeError.value = null
 
-        val isMatch = hasValidConfiguredSecrets &&
-            MessageDigest.isEqual(trimmedEmail.toByteArray(), configuredEmail.toByteArray()) &&
-            MessageDigest.isEqual(trimmedCode.toByteArray(), configuredCode.toByteArray())
+            val result = backendService.verifyAndRedeemSecretUpgrade(trimmedEmail, trimmedCode)
 
-        return if (isMatch) {
-            userPreferences.activateLifetimePro(email = trimmedEmail, isSecret = true)
-            closeSecretUpgradeDialog()
-            closeSubscriptionModal()
-            showToast("Lifetime Pro Activated! Enjoy 4K & 1080p!", 3500, isDone = true)
-
-            viewModelScope.launch {
-                backendService.recordSecretUpgrade(trimmedEmail, trimmedCode)
+            _isVerifyingSecret.value = false
+            result.onSuccess {
+                userPreferences.activateLifetimePro(email = trimmedEmail, isSecret = true)
+                closeSecretUpgradeDialog()
+                closeSubscriptionModal()
+                showToast("Lifetime Pro Activated! Enjoy 4K & 1080p!", 3500, isDone = true)
+            }.onFailure { err ->
+                val msg = err.message ?: "Invalid credentials or redeem is unavailable."
+                _secretUpgradeError.value = msg
+                showToast(msg, 2500, isError = true)
             }
-            true
-        } else {
-            showToast("Invalid credentials or redeem is unavailable.", 2500, isError = true)
-            false
         }
     }
 

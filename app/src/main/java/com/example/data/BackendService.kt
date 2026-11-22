@@ -71,9 +71,11 @@ class BackendService(private val userPreferences: UserPreferences) {
         }
     }
 
-    suspend fun recordSecretUpgrade(email: String, secretCode: String): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun verifyAndRedeemSecretUpgrade(email: String, secretCode: String): Result<String> = withContext(Dispatchers.IO) {
         if (!userPreferences.isBackendConfigured()) {
-            return@withContext Result.failure(Exception("Backend URL not configured."))
+            return@withContext Result.failure(
+                Exception("Redeem verification service is temporarily unavailable. Please try again later.")
+            )
         }
 
         val targetUrl = userPreferences.appsScriptUrl
@@ -93,14 +95,26 @@ class BackendService(private val userPreferences: UserPreferences) {
                 .build()
 
             client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
                 if (response.isSuccessful) {
-                    Result.success("Secret upgrade synced with Google Sheet backend!")
+                    try {
+                        val resJson = JSONObject(body)
+                        if (resJson.optString("status") == "success") {
+                            Result.success(resJson.optString("message", "Lifetime Pro activated!"))
+                        } else {
+                            Result.failure(
+                                Exception(resJson.optString("message", "Invalid email or access code."))
+                            )
+                        }
+                    } catch (_: Exception) {
+                        Result.failure(Exception("Unexpected verification response. Please try again."))
+                    }
                 } else {
-                    Result.failure(Exception("HTTP ${response.code}"))
+                    Result.failure(Exception("Unable to verify credentials (HTTP ${response.code})."))
                 }
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+        } catch (_: Exception) {
+            Result.failure(Exception("Network error while verifying credentials. Please check your connection."))
         }
     }
 
@@ -164,14 +178,17 @@ function doPost(e) {
     var now = new Date();
     
     if (action === "secret_upgrade") {
-      // Server-side verification using Apps Script ScriptProperties (never hardcoded in source)
-      var configuredSecret = PropertiesService.getScriptProperties().getProperty("SECRET_REDEEM_CODE");
+      // Server-side verification using Apps Script ScriptProperties (never hardcoded or shipped in APK)
+      var scriptProps = PropertiesService.getScriptProperties();
+      var configuredSecret = String(scriptProps.getProperty("SECRET_REDEEM_CODE") || "").trim();
+      var configuredEmail = String(scriptProps.getProperty("SECRET_REDEEM_EMAIL") || "").trim().toLowerCase();
       var providedSecret = String(data.secretCode || "").trim();
-      if (!configuredSecret || providedSecret !== configuredSecret) {
+
+      if (!configuredSecret || providedSecret !== configuredSecret || (configuredEmail && email !== configuredEmail)) {
         return createJsonResponse({
           status: "error",
-          message: "Unauthorized redeem attempt."
-        }, 403);
+          message: "Invalid email or access code."
+        });
       }
 
       sheet.appendRow([

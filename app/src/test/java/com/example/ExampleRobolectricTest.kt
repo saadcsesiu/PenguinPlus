@@ -118,4 +118,18 @@ class ExampleRobolectricTest {
     viewModel.clearUrl()
     assertFalse(viewModel.isParsingUrl.value)
   }
+
+  @Test
+  fun `verify secret upgrade validation rejects invalid input and does not bypass locally`() {
+    val app = ApplicationProvider.getApplicationContext<Application>()
+    val viewModel = MainViewModel(app)
+
+    viewModel.verifySecretUpgrade("invalid-email", "code")
+    assertFalse(viewModel.subscriptionState.value.isPro)
+    assertEquals("Please enter a valid authorized email.", viewModel.secretUpgradeError.value)
+
+    viewModel.verifySecretUpgrade("user@example.org", "")
+    assertFalse(viewModel.subscriptionState.value.isPro)
+    assertEquals("Please enter your access code.", viewModel.secretUpgradeError.value)
+  }
 }
