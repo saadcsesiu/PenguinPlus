@@ -82,3 +82,24 @@ jobs:
         with:
           name: PenguinPlus-Release-AAB
           path: app/build/outputs/bundle/release/*.aab
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          target_commitish: main
+          name: Penguin Plus+ Global Release
+          body: |
+            # Penguin Plus+ Global Release — v1.0.0
+
+            Initial global release of Penguin Plus+ for Android.
+
+            - First public release
+            - Signed Android APK distribution
+            - Download and install on compatible Android devices
+
+            Thank you for using Penguin Plus+!
+          files: app/build/outputs/apk/release/*.apk
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          make_latest: true
