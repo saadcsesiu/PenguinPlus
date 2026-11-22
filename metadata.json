@@ -1,0 +1,6 @@
+{
+  "name": "Penguin Plus",
+  "description": "High-performance, lightweight social media and video downloader app with butter-smooth animations and Pro features.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
